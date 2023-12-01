@@ -1,0 +1,82 @@
+#####################################################################################################
+######  Title: 0.3_Soybean_DLIPG_filter_SNPs_and_extract_scored_marker_genotype_from_vcf_file  ######
+######  Author: Kosuke Hamazaki (hamazaki@ut-biomet.org)                                       ######
+######  Affiliation: Lab. of Biometry and Bioinformatics, The University of Tokyo              ######
+######  Date: 2022/06/21 (Created), 2022/06/21 (Last Updated)                                  ######
+#####################################################################################################
+
+#### Settings
+### samtools: 1.15.1
+### vcftools: 0.1.16
+### plink: 1.9
+### Beagle: 5.4
+
+### Change working directory
+cd /Volumes/HD-PGF-A/research/Soybean/Project/DLIPG
+
+
+
+### Source file
+source ~/.zshrc
+
+
+
+#### Filtering and extract haplotype & genotype data
+### Cut MAF (0.025) & MS_rate (0.05)
+plink --bfile raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum --make-bed --out raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05 --geno 0.05 --maf 0.025
+
+
+### Convert PLINK data to vcf file
+plink --bfile raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05 --recode vcf-iid --out raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05
+
+
+### Compress vcf file
+bgzip raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05.vcf
+tabix raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05.vcf.gz
+
+
+### Select accessions and remove SNPs with MAF <= 0.025
+vcftools --gzvcf raw_data/genotype/soysnp50k_wm82.a1_41317_chrnum_maf0.025_ms0.05.vcf.gz --recode --keep data/extra/0.1_accession_names_selected_by_origin_based_kmedoids_equal_sampling.txt --stdout --maf 0.025 --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025 |bgzip -c > raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025.vcf.gz
+
+
+### Imputation using Beagle 5.4
+java -jar /Users/hamazaki/programs/beagle/beagle.05May22.33a.jar gt=raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025.vcf.gz  nthreads=12 out=raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed
+
+
+### Remove SNPs with MAF <= 0.025 and extract SNPs
+vcftools --gzvcf raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed.vcf.gz --recode --remove-indels --min-alleles 2 --max-alleles 2 --stdout --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP |bgzip -c > raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP.vcf.gz
+
+
+### Extract GT from vcf
+vcftools --gzvcf raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP.vcf.gz --extract-FORMAT-info GT --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_GT
+
+
+## Extract haplotype and genotype data (tsv format)
+## haplotype1
+grep -v "2|" | grep -v "|2" raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_GT.GT.FORMAT | sed "s/1|1/1/g"  | sed "s/0|1/0/g" | sed "s/1|0/1/g" | sed "s/0|0/0/g"  > data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_haplo1.tsv
+
+## haplotype2
+grep -v "2|" | grep -v "|2" raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_GT.GT.FORMAT | sed "s/1|1/1/g"  | sed "s/0|1/1/g" | sed "s/1|0/0/g" | sed "s/0|0/0/g"  > data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_haplo2.tsv
+
+## genotype  (-1, 0, 1)
+grep -v "2|" | grep -v "|2" raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_GT.GT.FORMAT | sed "s/1|1/1/g"  | sed "s/0|1/0/g" | sed "s/1|0/0/g" | sed "s/0|0/-1/g"  > data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_geno.tsv
+
+## genotype  (0, 1, 2)
+grep -v "2|" | grep -v "|2" raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_GT.GT.FORMAT | sed "s/1|1/2/g"  | sed "s/0|1/1/g" | sed "s/1|0/1/g" | sed "s/0|0/0/g"  > data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP_geno_012.tsv
+
+
+
+
+#### Estimate haplotype block
+### vcf --> ped
+vcftools --gzvcf raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP.vcf.gz --plink --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP
+
+### ped --> bed
+plink --ped raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP.ped --map raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP.map --make-bed --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP
+
+
+### estimate haplotype block (min-maf)
+plink --bfile raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP --blocks no-pheno-req --blocks-min-maf 0.025 --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_plink_minmaf0.025_haplotype_block_data
+
+
+plink --bfile raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_SNP --blocks no-pheno-req no-small-max-span --blocks-min-maf 0 --blocks-strong-lowci 0.5005 --blocks-strong-highci 0.8305 --blocks-recomb-highci 0.55 --out raw_data/genotype/L900_Soybean_a1_chrnum_maf0.025_ms0.05_ChKoJa_300x3_maf0.025_imputed_maf0.025_plink_minmaf0_long_LD_block_data
